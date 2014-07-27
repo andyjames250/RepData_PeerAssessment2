@@ -1,0 +1,121 @@
+# Public health and economic consequences of storms and other severe weather events
+
+## Synopsis
+
+The analysis below examines storms and other severe weather event data from the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database. The data cover the time period 1950-November 2011, with 902,297 events in total. Statistics are reported on the event types that caused the most damage across the United States in terms of public health and economic consequences. Public health consequences are measured as the total fatalities, injuries or casualties for each event type. Economic consequences are measured by total property damage, crop damage and combined damage in dollars for each event type. The event types in the top 1% are reported in each case. For casualties and combined damage, the most harmful event type was tornado.
+
+## Data Processing
+
+### Download the data
+
+Unzip the data if required, then read into memory as data1.
+
+```{r download, message=FALSE, results='hide'}
+library(R.utils)
+url <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
+csvFile <- "StormData.csv"
+zipFile <- paste0(csvFile, ".bz2")
+if (!file.exists(zipFile)) {
+        download.file(url, zipFile, method = "curl")
+}
+if (!file.exists(csvFile)) {
+        bunzip2(zipFile, csvFile, overwrite = TRUE)
+}
+data1 <- read.csv(csvFile)
+```
+
+### Process the raw data
+
+- Create a new data frame data2 with the variables EVTYPE, FATALITIES, INJURIES, PROPDMG, and CROPDMG.
+- Trim the EVTYPE variable.
+- Create variable casualties which represents combined fatalities and injuries.
+- Create variable combinedDamage which represents combined property damage and crop damage.
+
+```{r process1, message=FALSE, results='hide'}
+library(gdata)
+data2 <- data1[, c(8, 23, 24, 25, 27)]
+trim(data2$EVTYPE, recode.factor = TRUE)
+data2$casualties <- data2$FATALITIES + data2$INJURIES
+data2$combinedDamage <- data2$PROPDMG + data2$CROPDMG
+```
+
+### Summary of Data
+
+Report the dimensions of the raw data, and the dimensions, incomplete cases, and first few rows of data2.
+
+```{r process2}
+dim(data1)
+dim(data2)
+sum(complete.cases(data2))
+head(data2)
+```
+
+Report descriptive statistics for all variables of interest.
+
+```{r summary}
+summary(data2)
+```
+
+## Results
+
+Create a table showing the sums of casualties and combined damage by event type.
+
+```{r createGroupSum}
+library(plyr)
+library(reshape2)
+data3 <- melt(data2, id = "EVTYPE")
+data4 <- ddply(data3, .(EVTYPE, variable), summarise, 
+               sum = sum(value, na.rm = TRUE))
+data5 <- dcast(data4, EVTYPE ~ variable, sum)
+head(data5)
+```
+
+### Public health consequences
+
+Report event types in the top 1% for public health consequences for fatalities, injuries and casualties. Plot the top 1% of event types for casualties.
+
+```{r publichealth}
+library(ggplot2)
+library(scales)
+data6 <- arrange(data5[data5$FATALITIES > quantile(data5$FATALITIES, 0.99), c(1, 2)], 
+        desc(FATALITIES))
+data7 <- arrange(data5[data5$INJURIES > quantile(data5$INJURIES, 0.99), c(1, 3)], 
+        desc(INJURIES))
+data8 <- arrange(data5[data5$casualties > quantile(data5$casualties, 0.99), c(1, 6)], 
+        desc(casualties))
+data8$EVTYPE <- factor(data8$EVTYPE, levels = data8$EVTYPE, ordered = TRUE)
+bar1 <- ggplot() + geom_bar(aes(x = EVTYPE, y = casualties), data8, stat = "identity") + 
+        ggtitle("Casualties Top 1% Event Types") + 
+        xlab("Event Type") + ylab("Total Casualties") + 
+        theme(axis.text.x = element_text(angle = 90)) + 
+        scale_y_continuous(labels = comma)
+data6
+data7
+data8
+bar1
+```
+
+### Economic consequences
+
+Report event types in the top 1% for economic consequences for property damage, crop damage and combined damage. Plot the top 1% of event types for combined damage.
+
+```{r economic}
+library(ggplot2)
+library(scales)
+data9 <- arrange(data5[data5$PROPDMG > quantile(data5$PROPDMG, 0.99), c(1, 4)], 
+        desc(PROPDMG))
+data10 <- arrange(data5[data5$CROPDMG > quantile(data5$CROPDMG, 0.99), c(1, 5)], 
+        desc(CROPDMG))
+data11 <- arrange(data5[data5$combinedDamage > quantile(data5$combinedDamage, 0.99), c(1, 7)], 
+        desc(combinedDamage))
+data11$EVTYPE <- factor(data11$EVTYPE, levels = data11$EVTYPE, ordered = TRUE)
+bar2 <- ggplot() + geom_bar(aes(x = EVTYPE, y = combinedDamage), data11, stat = "identity") + 
+        ggtitle("Combined Damage Top 1% Event Types") + 
+        xlab("Event Type") + ylab("Total Combined Damage") + 
+        theme(axis.text.x = element_text(angle = 90)) + 
+        scale_y_continuous(labels = dollar)
+data9
+data10
+data11
+bar2
+```
